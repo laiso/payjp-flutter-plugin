@@ -1,3 +1,10 @@
+## 0.7.5
+
+- Update payjp-ios to [2.2.1](https://github.com/payjp/payjp-ios/releases/tag/2.2.1).
+    - This feature ( https://github.com/payjp/payjp-ios/pull/95 ) is not yet available.
+- Update payjp-android to [2.2.0](https://github.com/payjp/payjp-android/releases/tag/2.2.0).
+    - This update has no impact.
+
 ## 0.7.4
 
 - Remove deprecated Registrar usage in Android embedding v1 classes. #87

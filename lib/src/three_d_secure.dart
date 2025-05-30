@@ -10,3 +10,17 @@ class PayjpThreeDSecureRedirect {
   final String key;
   PayjpThreeDSecureRedirect({required this.url, required this.key});
 }
+
+/// 3Dセキュア処理のステータスを表す列挙型
+enum ThreeDSecureProcessStatus {
+  /// 3Dセキュア処理が完了した
+  completed,
+  /// 3Dセキュア処理がキャンセルされた
+  canceled,
+}
+
+/// 3Dセキュア処理が成功したときに実行されるコールバック
+typedef OnThreeDSecureProcessSucceeded = void Function(ThreeDSecureProcessStatus status);
+
+/// 3Dセキュア処理が失敗したときに実行されるコールバック
+typedef OnThreeDSecureProcessFailed = void Function({required String message, required int code});

@@ -50,6 +50,7 @@ class PayjpFlutterPlugin: MethodCallHandler, FlutterPlugin, ActivityAware {
   private var channel: MethodChannel? = null
   private var applicationContext: Context? = null
   private var cardFormModule: CardFormModule? = null
+  private var threeDSecureHandler: PayjpThreeDSecureHandler? = null
 
   override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     setUpChannel(binding.applicationContext, binding.binaryMessenger)
@@ -60,14 +61,19 @@ class PayjpFlutterPlugin: MethodCallHandler, FlutterPlugin, ActivityAware {
     channel?.setMethodCallHandler(null)
     channel = null
     cardFormModule = null
+    threeDSecureHandler = null
   }
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
     cardFormModule?.binding = binding
+    threeDSecureHandler = PayjpThreeDSecureHandler(channel!!)
+    threeDSecureHandler?.binding = binding
   }
 
   override fun onDetachedFromActivity() {
     cardFormModule?.binding = null
+    threeDSecureHandler?.binding = null
+    threeDSecureHandler = null
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -93,60 +99,77 @@ class PayjpFlutterPlugin: MethodCallHandler, FlutterPlugin, ActivityAware {
     }
   }
 
-  override fun onMethodCall(call: MethodCall, result: Result) = when (call.method) {
-    ChannelContracts.INITIALIZE -> {
-      val publicKey = checkNotNull(call.argument<String>("publicKey"))
-      val debugEnabled = checkNotNull(call.argument<Boolean>("debugEnabled"))
-      val locale = call.argument<String>("locale")?.let { tag ->
-        LocaleListCompat.forLanguageTags(tag).takeIf { it.size() > 0 }?.get(0)
-      } ?: Locale.getDefault()
-      val clientInfo = ClientInfo.Builder()
-        .setPlugin("jp.pay.flutter/${BuildConfig.VERSION_NAME}")
-        .setPublisher("payjp")
-        .build()
-      val tdsRedirectKey = call.argument<String>("threeDSecureRedirectKey")
-      Payjp.init(PayjpConfiguration.Builder(publicKey = publicKey)
-        .setDebugEnabled(debugEnabled)
-        .setTokenBackgroundHandler(cardFormModule)
-        .setLocale(locale)
-        .setCardScannerPlugin(PayjpCardScannerPlugin)
-        .setClientInfo(clientInfo)
-        .setThreeDSecureRedirectName(tdsRedirectKey)
-        .build())
-      result.success(null)
-    }
-    ChannelContracts.START_CARD_FORM -> {
-      val tenantId = call.argument<String>("tenantId")?.let { TenantId(it) }
-      var face = PayjpCardForm.FACE_MULTI_LINE
-      call.argument<String>("cardFormType")?.let {
-        if (it == "cardDisplay") {
-          face = PayjpCardForm.FACE_CARD_DISPLAY
-        }
+  override fun onMethodCall(call: MethodCall, result: Result) {
+    when (call.method) {
+      ChannelContracts.INITIALIZE -> {
+        val publicKey = checkNotNull(call.argument<String>("publicKey"))
+        val debugEnabled = checkNotNull(call.argument<Boolean>("debugEnabled"))
+        val locale = call.argument<String>("locale")?.let { tag ->
+          LocaleListCompat.forLanguageTags(tag).takeIf { it.size() > 0 }?.get(0)
+        } ?: Locale.getDefault()
+        val clientInfo = ClientInfo.Builder()
+          .setPlugin("jp.pay.flutter/${BuildConfig.VERSION_NAME}")
+          .setPublisher("payjp")
+          .build()
+        val tdsRedirectKey = call.argument<String>("threeDSecureRedirectKey")
+        Payjp.init(PayjpConfiguration.Builder(publicKey = publicKey)
+          .setDebugEnabled(debugEnabled)
+          .setTokenBackgroundHandler(cardFormModule)
+          .setLocale(locale)
+          .setCardScannerPlugin(PayjpCardScannerPlugin)
+          .setClientInfo(clientInfo)
+          .setThreeDSecureRedirectName(tdsRedirectKey)
+          .build())
+        result.success(null)
       }
-      val extraAttributes: Array<ExtraAttribute<*>> = listOfNotNull(
-        ExtraAttribute.Email(call.argument<String>("extraAttributesEmailPreset"))
-          .takeIf { call.argument<Boolean>("extraAttributesEmailEnabled") ?: false },
-        ExtraAttribute.Phone(
-          region = call.argument<String>("extraAttributesPhonePresetRegion") ?: "JP",
-          number = call.argument<String>("extraAttributesPhonePresetNumber")
-        ).takeIf { call.argument<Boolean>("extraAttributesPhoneEnabled") ?: false }
-      ).toTypedArray()
-      val useThreeDSecure = call.argument<Boolean>("useThreeDSecure") ?: false
-      cardFormModule?.startCardForm(
-        result = result,
-        tenantId = tenantId,
-        face = face,
-        extraAttributes = extraAttributes,
-        useThreeDSecure = useThreeDSecure,
-      ) ?: result.pluginError("plugin not attached.")
+      ChannelContracts.START_CARD_FORM -> {
+        val tenantId = call.argument<String>("tenantId")?.let { TenantId(it) }
+        val cardFormType = call.argument<String>("cardFormType")?.let {
+          when (it) {
+            "multiLine" -> PayjpCardForm.FACE_MULTI_LINE
+            "singleLine" -> PayjpCardForm.FACE_MULTI_LINE // TODO: Update when FACE_SINGLE_LINE is available
+            else -> PayjpCardForm.FACE_MULTI_LINE
+          }
+        } ?: PayjpCardForm.FACE_MULTI_LINE
+        val extraAttributes = mutableListOf<ExtraAttribute<*>>()
+        if (call.argument<Boolean>("extraAttributesEmailEnabled") == true) {
+          extraAttributes.add(ExtraAttribute.Email(call.argument<String>("extraAttributesEmailPreset")))
+        }
+        if (call.argument<Boolean>("extraAttributesPhoneEnabled") == true) {
+          extraAttributes.add(ExtraAttribute.Phone(
+            call.argument<String>("extraAttributesPhonePresetRegion") ?: "JP",
+            call.argument<String>("extraAttributesPhonePresetNumber")
+          ))
+        }
+        val useThreeDSecure = call.argument<Boolean>("useThreeDSecure") ?: false
+        cardFormModule?.startCardForm(
+          result,
+          tenantId,
+          cardFormType,
+          extraAttributes.toTypedArray(),
+          useThreeDSecure
+        )
+      }
+      ChannelContracts.START_THREE_D_SECURE_WITH_RESOURCE_ID -> {
+        val resourceId = call.argument<String>("resourceId")
+        if (resourceId == null) {
+          result.error("INVALID_ARGUMENT", "resourceId is required", null)
+          return
+        }
+        threeDSecureHandler?.startThreeDSecureWithResourceId(result, resourceId)
+      }
+      ChannelContracts.COMPLETE_CARD_FORM -> {
+        cardFormModule?.completeCardForm(result)
+      }
+      ChannelContracts.SHOW_TOKEN_PROCESSING_ERROR -> {
+        val message = call.argument<String>("message")
+        if (message == null) {
+          result.error("INVALID_ARGUMENT", "message is required", null)
+          return
+        }
+        cardFormModule?.showTokenProcessingError(result, message)
+      }
+      else -> result.notImplemented()
     }
-    ChannelContracts.SHOW_TOKEN_PROCESSING_ERROR -> {
-      val message = checkNotNull(call.argument<String>("message"))
-      cardFormModule?.showTokenProcessingError(result, message) ?: result.pluginError("plugin not attached.")
-    }
-    ChannelContracts.COMPLETE_CARD_FORM -> {
-      cardFormModule?.completeCardForm(result) ?: result.pluginError("plugin not attached.")
-    }
-    else -> result.notImplemented()
   }
 }

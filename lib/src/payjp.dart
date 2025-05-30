@@ -252,4 +252,41 @@ class Payjp {
     };
     await channel.invokeMethod('makeApplePayToken', params);
   }
+
+  /// 「支払い時」「顧客カードに対する3Dセキュア」に対応するメソッド
+  /// resourceIdを使用して3Dセキュア処理を行います
+  /// 
+  /// [resourceId]は処理対象のリソースIDを指定します（例：charge_xxxやcard_xxx）
+  /// [onSucceeded]は3Dセキュア処理が成功した時のコールバック
+  /// [onFailed]は3Dセキュア処理が失敗した時のコールバック
+  static Future<void> startThreeDSecureProcess(
+    String resourceId,
+    OnThreeDSecureProcessSucceeded onSucceeded,
+    OnThreeDSecureProcessFailed onFailed,
+  ) async {
+    _onCardFormCompletedCallback = () => onSucceeded(ThreeDSecureProcessStatus.completed);
+    _onCardFormCanceledCallback = () => onSucceeded(ThreeDSecureProcessStatus.canceled);
+    try {
+      final params = <String, dynamic>{
+        'resourceId': resourceId,
+      };
+      await channel.invokeMethod('startThreeDSecureWithResourceId', params);
+    } catch (e) {
+      onFailed(message: e.toString(), code: 1);
+    }
+  }
+
+  /// @deprecated Use [startThreeDSecureProcess] instead.
+  static Future startThreeDSecureWithResourceId({
+    required String resourceId,
+    OnCardFormCompletedCallback? onThreeDSecureCompleted,
+    OnCardFormCanceledCallback? onThreeDSecureCanceled,
+  }) async {
+    _onCardFormCompletedCallback = onThreeDSecureCompleted;
+    _onCardFormCanceledCallback = onThreeDSecureCanceled;
+    final params = <String, dynamic>{
+      'resourceId': resourceId,
+    };
+    await channel.invokeMethod('startThreeDSecureWithResourceId', params);
+  }
 }

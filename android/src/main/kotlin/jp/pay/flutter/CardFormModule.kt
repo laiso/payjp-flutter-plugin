@@ -93,20 +93,38 @@ internal class CardFormModule(
         result.success(null)
     }
 
+    fun startThreeDSecureWithResourceId(result: MethodChannel.Result, resourceId: String) {
+        // TODO: 3D Secure functionality will be implemented when PAY.JP SDK supports it
+        result.error("NOT_IMPLEMENTED", "3D Secure with resource ID not yet implemented", null)
+    }
+
     // PluginRegistry.ActivityResultListener
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
         if (requestCode != requestCodeCardForm) {
             return false
         }
+        
+        // TODO: 3D Secure result handling will be implemented when PAY.JP SDK supports it
+        // Payjp.threeDSecure().handleResult(data)?.let { threeDSecureResult ->
+        //     if (threeDSecureResult.isSuccess()) {
+        //         channel.invokeMethod(ChannelContracts.ON_CARD_FORM_COMPLETED, null)
+        //     } else if (threeDSecureResult.isCanceled()) {
+        //         channel.invokeMethod(ChannelContracts.ON_CARD_FORM_CANCELED, null)
+        //     }
+        //     return true
+        // }
+        
+        // Handle as card form result
         Payjp.cardForm().handleResult(data, object: PayjpCardFormResultCallback {
             override fun onResult(result: PayjpCardFormResult) {
-            if (result.isSuccess()) {
-                channel.invokeMethod(ChannelContracts.ON_CARD_FORM_COMPLETED, null)
-            } else if (result.isCanceled()) {
-                channel.invokeMethod(ChannelContracts.ON_CARD_FORM_CANCELED, null)
+                val method = when {
+                    result.isSuccess() -> ChannelContracts.ON_CARD_FORM_COMPLETED
+                    result.isCanceled() -> ChannelContracts.ON_CARD_FORM_CANCELED
+                    else -> return
+                }
+                channel.invokeMethod(method, null)
             }
-        }
         })
         return true
     }

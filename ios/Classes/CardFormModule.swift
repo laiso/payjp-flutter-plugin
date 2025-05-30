@@ -26,10 +26,12 @@ class CardFormModule: CardFormModuleType {
     private let channel: FlutterMethodChannel
     private var completionHandler: ((Error?) -> Void)?
     private var style: FormStyle = .defaultStyle
+    private let threeDSecureHandler: ThreeDSecureHandler
 
     init(channel: FlutterMethodChannel) {
         self.channel = channel
         self.completionHandler = nil
+        self.threeDSecureHandler = ThreeDSecureHandler(channel: channel)
     }
 
     func startCardForm(_ result: FlutterResult, with tenantId: String?, viewType: CardFormViewType, extraAttributes: [ExtraAttribute], useThreeDSecure: Bool) {
@@ -111,4 +113,12 @@ extension CardFormModule: CardFormViewControllerDelegate {
         self.channel.invokeMethod(method.rawValue, arguments: token.rawValue)
     }
 
+}
+
+// MARK: - ThreeDSecureProcessHandlerDelegate
+
+extension CardFormModule: ThreeDSecureProcessHandlerDelegate {
+    func threeDSecureProcessHandlerDidFinish(_ handler: ThreeDSecureProcessHandler, status: ThreeDSecureProcessStatus) {
+        threeDSecureHandler.threeDSecureProcessHandlerDidFinish(handler, status: status)
+    }
 }

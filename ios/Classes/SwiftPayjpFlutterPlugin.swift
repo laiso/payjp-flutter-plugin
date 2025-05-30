@@ -2,7 +2,7 @@ import Flutter
 import UIKit
 import PAYJP
 
-public class SwiftPayjpFlutterPlugin: NSObject, FlutterPlugin {
+public class SwiftPayjpFlutterPlugin: NSObject, FlutterPlugin, ThreeDSecureProcessHandlerDelegate {
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "payjp", binaryMessenger: registrar.messenger())
         let instance = SwiftPayjpFlutterPlugin(channel: channel)
@@ -11,11 +11,13 @@ public class SwiftPayjpFlutterPlugin: NSObject, FlutterPlugin {
     private let channel: FlutterMethodChannel
     private let cardFormModule: CardFormModuleType
     private let applePayModule: ApplePayModule
+    private let threeDSecureHandler: ThreeDSecureHandler
 
     init(channel: FlutterMethodChannel) {
         self.channel = channel
         self.cardFormModule = CardFormModule(channel: channel)
         self.applePayModule = ApplePayModule(channel: channel)
+        self.threeDSecureHandler = ThreeDSecureHandler(channel: channel)
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -148,6 +150,29 @@ public class SwiftPayjpFlutterPlugin: NSObject, FlutterPlugin {
                                                      errorMessage: errorMessage)
             }
             break
+        case .startThreeDSecureWithResourceId:
+            guard let resourceId = argsDictionary?["resourceId"] as? String else {
+                result(FlutterError(code: "INVALID_ARGUMENT", 
+                                   message: "resourceId is required", 
+                                   details: nil))
+                return
+            }
+            
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first(where: { $0.isKeyWindow }),
+                  let viewController = window.rootViewController else {
+                result(FlutterError(code: "VIEW_CONTROLLER_NOT_FOUND", 
+                                   message: "Could not find root view controller", 
+                                   details: nil))
+                return
+            }
+            
+            let handler = ThreeDSecureProcessHandler.shared
+            handler.startThreeDSecureProcess(viewController: viewController, 
+                                          delegate: threeDSecureHandler, 
+                                          resourceId: resourceId)
+            result(nil)
+            break
         }
     }
 
@@ -157,5 +182,11 @@ public class SwiftPayjpFlutterPlugin: NSObject, FlutterPlugin {
         let g = CGFloat((hex & 0x0000FF00) >>  8) / 255.0
         let b = CGFloat(hex & 0x000000FF) / 255.0
         return UIColor(red: r, green: g, blue: b, alpha: a)
+    }
+    
+    // MARK: - ThreeDSecureProcessHandlerDelegate
+    
+    public func threeDSecureProcessHandlerDidFinish(_ handler: ThreeDSecureProcessHandler, status: ThreeDSecureProcessStatus) {
+        threeDSecureHandler.threeDSecureProcessHandlerDidFinish(handler, status: status)
     }
 }

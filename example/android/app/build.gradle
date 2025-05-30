@@ -30,6 +30,7 @@ plugins {
 android {
     namespace = "jp.pay.flutter.example"
     compileSdk = flutter.compileSdkVersion
+    ndkVersion = "26.3.11579264"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
